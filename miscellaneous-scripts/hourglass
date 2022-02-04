@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# This script asks with a GUI dialog how many minutes your kid is allowed to play.
+# When time has passed, the script will warn your kid and then shut down.
+# You can specify multiple periods if multiple kids want to play; 
+# this script will notify when it's time for them to swap places.
+
+# Change log:
+# 2016-03-11 - Initial upload (Dutch interface) to Github - Onno Zweers
+# 2016-03-13 - Internationalizing - Onno Zweers
+
+
+
+case $LANG in
+  nl* )
+    ENTER_MINUTES_PLAYING_TIME='Aantal minuten speeltijd'
+    SEPERATE_MULTIPLE_TIMES_WITH_SPACE='Meerdere tijden scheiden met een spatie'
+    INPUT_INVALID='Invoer was ongeldig.'
+    TIME_STARTS_NOW='Je tijd ($time minuten) gaat NU in!'
+    TIME_TO_SWAP='Wisselen! Volgende tijd is $time minuten.'
+    TIME_IS_UP='De tijd is om!'
+    SYSTEM_WILL_SHUT_DOWN='Computer gaat stoppen...'
+    SYSTEM_IS_SHUTTING_DOWN_NOW='De computer gaat NU afsluiten!'
+    ;;
+  en* )
+    ENTER_MINUTES_PLAYING_TIME='Minutes of playing time'
+    SEPERATE_MULTIPLE_TIMES_WITH_SPACE='Separate multiple times with spaces'
+    INPUT_INVALID='Input was invalid.'
+    TIME_STARTS_NOW='Your time ($time minutes) starts NOW!'
+    TIME_TO_SWAP='Time to swap! Next time is $time minutes.'
+    TIME_IS_UP='Time is up!'
+    SYSTEM_WILL_SHUT_DOWN='Computer will shut down...'
+    SYSTEM_IS_SHUTTING_DOWN_NOW='The computer is shutting down NOW!'
+    ;;
+  * )
+    echo 'Your language is not supported yet. Please feel free to add your translations to https://github.com/onnozweers/scripts/blob/master/hourglass.'
+esac
+
+
+
+minutes=$(zenity --entry \
+                 --title="$ENTER_MINUTES_PLAYING_TIME" \
+                 --text="$SEPERATE_MULTIPLE_TIMES_WITH_SPACE" \
+                 --entry-text="10")
+
+if [ -z "$minutes" ] ; then
+  echo "Usage: `basename $0` <minutes>"
+  exit 1
+fi
+
+# Abort if the input contains something else than numbers and spaces.
+if [[ $minutes =~ "[^0-9 ]" ]] ; then
+  echo "$INPUT_INVALID"
+  exit 1
+fi
+
+# Space? Then multiple times
+if [[ "$minutes" =~ " " ]] ; then
+  # Allow parent some time to make way for the kids
+  sleep 10s
+  first=yes
+  for time in $minutes ; do
+    if [ "$first" = "yes" ] ; then
+      notify-send "${TIME_STARTS_NOW/\$time/$time}"
+      sleep ${time}m
+      first=no
+    else
+      notify-send --urgency=critical "${TIME_TO_SWAP/\$time/$time}"
+      sleep ${time}m
+    fi
+  done
+else  # Only a single amount of minutes specified
+  time=$minutes
+  echo "${TIME_STARTS_NOW}"
+  echo "${time}"
+  echo "${TIME_STARTS_NOW/\$time/$time}"
+  # Allow parent some time to make way for the kids
+  sleep 10s
+  notify-send "${TIME_STARTS_NOW/\$time/$time}"
+  sleep ${minutes}m
+fi
+
+notify-send --urgency=critical "$TIME_IS_UP"
+
+for progress in {1..100} ; do 
+  echo $progress
+  sleep 0.3s
+done \
+| zenity --progress \
+         --text="$SYSTEM_WILL_SHUT_DOWN" \
+         --no-cancel --auto-close
+
+notify-send --urgency=critical "$SYSTEM_IS_SHUTTING_DOWN_NOW"
+sleep 20s
+
+poweroff

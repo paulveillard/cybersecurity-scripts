@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# This script will install OpenVAS on a centos 7 host. I tested it on a minimal install;
+# I assume it will work also on other Centos 7 install types.
+# It installs packages from the EPEL repo.
+# Some people may prefer the packages from the Atomicorp repo: see this link for details:
+# https://forums.atomicorp.com/viewtopic.php?f=31&t=8539#p44057
+
+# Usage:
+# wget https://raw.githubusercontent.com/onnozweers/scripts/master/install-openvas-centos7
+# chmod 700 install-openvas-centos7
+# ./install-openvas-centos7
+
+# Changelog:
+# 2017-05-18 - Created by Onno Zweers.
+
+if [[ $UID != 0 ]] ; then
+  echo "You must be root."
+  exit 1
+fi
+
+if getenforce | grep Enforcing ; then
+  echo "SElinux is in Enforcing mode. Disable SElinux. (Hint: /etc/sysconfig/selinux)"
+  exit 1
+fi
+
+echo -e "\nAdding EPEL repo...\n"
+yum -y install epel-release
+
+echo -e "\nRunning yum update...\n"
+yum -y update
+
+echo -e "\nInstall openvas packages and some dependencies...\n"
+yum -y install openvas-cli openvas-manager openvas-scanner openvas-gsa redis bzip2 \
+               texlive texlive-latex-bin-bin texlive-titlesec alien nsis nmap bind-utils net-tools
+
+echo -e "\nStarting redis...\n"
+sed -e 's@^# unixsocket /tmp/redis.sock@unixsocket /tmp/redis.sock@' \
+    -e 's@^# unixsocketperm 700@unixsocketperm 700@' \
+    -i /etc/redis.conf
+systemctl start  redis
+systemctl enable redis
+sleep 5s
+
+echo -e "\nSetting up openvas. You may be asked for some input.\n"
+openvas-mkcert
+openvas-nvt-sync
+systemctl start  openvas-scanner.service
+systemctl enable openvas-scanner.service
+
+echo -e "\nWaiting for openvas-scanner to initialize (this may take 5 minutes)..."
+until systemctl status openvas-scanner.service | grep 'Waiting for incoming connection' ; do
+  systemctl status openvas-scanner.service | grep ETA
+  sleep 10s
+done
+echo -e "\n\nopenvas-scanner has started.\n"
+
+openvas-mkcert-client -i
+openvasmd --rebuild
+#openvasmd --create-user=johndoe --role=Admin
+openvas-scapdata-sync
+openvas-certdata-sync
+systemctl start  openvas-manager.service
+systemctl enable openvas-manager.service
+systemctl start  openvas-gsa.service
+systemctl enable openvas-gsa.service
+openvas-check-setup

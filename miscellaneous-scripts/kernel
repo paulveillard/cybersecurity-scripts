@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# This scripts lists all kernels and indicates which kernel is selected to boot.
+# You can also set the entry you want to boot next.
+
+# Tested on Centos 7; quit on other distros
+if [ -f '/etc/os-release' ] ; then
+  source '/etc/os-release'
+  if [ "$PRETTY_NAME" != "CentOS Linux 7 (Core)" ]  ; then
+    echo "This script was tested on Centos 7. Use on other distros may be DANGEROUS!"
+    exit 1
+  fi
+else
+  echo "Could not determine distro."
+  exit 1
+fi
+
+# Refresh kernel list
+grub2-mkconfig -o /boot/grub2/grub.cfg 2> /dev/null
+
+KERNEL_LIST=$(
+  grep -P -o "menuentry '.*?'" /boot/grub2/grub.cfg \
+  | sed -e "s/menuentry '\(.*\)'/\1/" \
+  | nl -v 0 -w 2 -s ' '
+)
+
+# What to do, provide a list or set the kernel?
+if [ -z "$1" ] ; then
+  # Show which kernel of the list is set to boot.
+  grub_default=$(grep GRUB_DEFAULT /etc/default/grub | sed -e 's/GRUB_DEFAULT=//')
+  if [ "$grub_default" = "saved" ] ; then
+    echo "Default kernel: saved ($(grep saved_entry /boot/grub2/grubenv))"
+    grub_default=999  # Don't show highlighted item
+  fi
+  echo "$KERNEL_LIST" | sed -e 's/^/ /' -e "$((grub_default + 1))s/^ />/"
+else
+  # If a number is provided, select the kernel with that number for boot.
+  case $1 in
+    *[!0-9]* )
+      echo "Please provide a number to set the boot kernel."
+      exit
+      ;;
+  esac
+  echo "Selecting kernel $1..."
+  sed -i -e "s/GRUB_DEFAULT=.*/GRUB_DEFAULT=$1/" /etc/default/grub
+  grub2-mkconfig -o /boot/grub2/grub.cfg 2> /dev/null
+  grub_default=$(grep GRUB_DEFAULT /etc/default/grub | sed -e 's/GRUB_DEFAULT=//')
+  grep -P -o "menuentry '.*?'" /boot/grub2/grub.cfg \
+  | sed -e "s/menuentry '\(.*\)'/\1/" \
+  | nl -v 0 -w 2 -s ' ' \
+  | sed -e 's/^/ /' -e "$((grub_default + 1))s/^ />/"
+fi

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# This script will issue a reboot command when all interactive users have left the system.
+# It's useful for activating a new kernel without bothering the users.
+# Changelog:
+# 2013-11-14 - Onno - Created
+
+if [ "$1" = "--nohup" ] ; then
+  # This script has called itself in a nohup shell. Let's get to work.
+  while true ; do
+    if [ -z "`who`" ] ; then
+      echo "`date` - No user found. Rebooting."
+      reboot
+    else
+      echo "`date` - Users found. Sleeping."
+    fi
+    sleep 60
+  done
+else
+  echo "This script will call itself in a nohup shell. You can log out. If all users have left the system, it will be rebooted. To cancel the reboot, do 'ps -ef | grep nohup' and kill this script."
+  nohup $0 --nohup &
+fi

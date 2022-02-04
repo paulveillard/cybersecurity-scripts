@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# The version of duplicity in the EL repo is way too old.
+# This installs the latest duplicity, including dependencies.
+# This script has been tested on Centos 7.
+# Just run it as root, sit back and enjoy:
+#   wget https://raw.githubusercontent.com/onnozweers/scripts/master/install-duplicity
+#   chmod 700 install-duplicity 
+#   ./install-duplicity 
+
+# Changelog:
+# 2016-10-17 - First version - Onno
+# 2016-11-04 - Added yum install wget (it's not in Minimal)
+# 2016-11-09 - Added python-paramiko - Onno
+# 2016-11-12 - Added rsync, python-crypto, python-boto - Onno
+# 2017-05-24 - Added python-swiftclient and python-keystoneclient - Onno
+# 2020-12-30 - Adapted for python3 - Onno
+# 2021-01-08 - Added wheel; showing duplicity version after install - Onno
+
+# For package details see http://duplicity.nongnu.org/duplicity.1.html#sect30 (Requirements section)
+yum -y install wget gcc rsync \
+               python3 python3-devel python3-pip librsync-devel python-lockfile \
+               python-paramiko python-crypto python-boto
+pip3 install PyDrive python-swiftclient python-keystoneclient fasteners future wheel
+
+# Prepare dir
+cd
+mkdir -p duplicity
+cd duplicity
+
+# Clean up previous stuff
+rm -rf /root/duplicity/*
+
+# Find the latest duplicity source tarball from Launchpad.
+# The 'grep -v duplicity-0.7.07.tar.gz' is because there is a 0.7.07.1 that complicates sorting.
+latest=$(wget https://code.launchpad.net/duplicity/+download -o /dev/null -O - \
+         | egrep -o 'https://code.launchpad.net/duplicity/[-0-9a-z\./]+/\+download/duplicity-[-0-9a-z\.]+.tar.gz' \
+         | grep -v duplicity-0.7.07.tar.gz \
+         | sort -r \
+         | head -n 1)
+wget "$latest" -O duplicity.tar.gz
+tar -xf duplicity.tar.gz
+cd duplicity*/
+python3 setup.py install
+
+echo
+echo 'Checking `duplicity --version`:'
+duplicity --version

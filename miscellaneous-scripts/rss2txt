@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Reads a RSS feed and outputs the items as text.
+# Based on https://www.linuxjournal.com/content/parsing-rss-news-feed-bash-script
+# Slightly enhanced by Onno Zweers.
+
+usage() {
+  echo "$0 --help"
+  echo "$0 [--debug] --format format [--timeout seconds] [--since timestamp] url1 [url2 [...]]"
+  echo "Format: \"%title% - %link% - %pubDate% - %description%\" "
+}
+
+# Initialize some values
+debug=false
+feeds=()
+formatstring=''
+timeout=30
+since=''
+
+# Collect arguments
+while [ $# -gt 0 ] ; do
+  case "$1" in
+    -h | --help )
+      usage
+      exit 1
+      ;;
+    --debug )
+      debug=true
+      shift
+      ;;
+    --format )
+      formatstring=$2
+      shift ; shift
+      ;;
+    --timeout )
+      timeout=$2
+      shift ; shift
+      ;;
+    --since )
+      since=$(date +%s --date "$2")
+      shift ; shift
+      ;;
+    http* )
+      feeds+=("$1")
+      shift
+      ;;
+    * )
+      echo "Unknown option $1."
+      shift
+  esac
+done
+
+
+xmlgetnext () {
+   local IFS='>'
+   read -d '<' TAG VALUE
+}
+
+
+
+for feed in "${feeds[@]}" ; do
+  count_items=0
+  count_ignored=0
+  # Input to this while loop is provided at the terminating 'done' below;
+  # See http://mywiki.wooledge.org/BashFAQ/024
+  while xmlgetnext ; do
+    case $TAG in
+      'item' )
+         title=''
+         link=''
+         pubDate=''
+         description=''
+         ;;
+      'title' )
+         title="$VALUE"
+         ;;
+      'link' )
+         link="$VALUE"
+         ;;
+      'pubDate' | 'published' )
+         pubDate=$( date --date "$VALUE" )
+         ;;
+      'description' )
+         # convert '&lt;' and '&gt;' to '<' and '>'
+         description=$( echo "$VALUE" | sed -e 's/&lt;/</g' -e 's/&gt;/>/g' )
+         ;;
+      '/item' )
+         # End of an item reached; process it.
+         # Only print when item is newer than "--since" value or date not specified
+         if [ -z "$since" ] || [ -z "$pubDate" ] || [ $(date --date "$pubDate" +%s) -gt $since ] ; then
+           safe_title=$( echo "$title" | sed -e 's/|/\\|/g' -e "s/&apos;/'/g" -e 's/&amp;/\&/g' -e 's/&/\\\&/g')
+           safe_link=$(  echo "$link"  | sed -e 's/|/\\|/g' \
+                                             -e "s/&apos;/'/g" \
+                                             -e 's/&amp;/\&/g' \
+                                             -e 's/%\([0-9a-fA-F][0-9a-fA-F]\)/\\\\\\x\1/g' \
+                                             -e 's/&/\\\&/g' )
+           safe_pubDate=$( echo "$pubDate" | sed -e 's/|/\\|/g' )
+           safe_description=$( echo "$description" | recode html..utf-8 | sed -e 's/|/\\|/g' -e "s/&apos;/'/g" -e 's/&amp;/\&/g' -e 's/&/\\\&/g')
+           echo -e "$formatstring" \
+           | sed -e "s|%title%|${safe_title}|g" \
+                 -e "s|%link%|${safe_link}|g" \
+                 -e "s|%pubDate%|${safe_pubDate}|g" \
+                 -e "s|%description%|${safe_description}|g"
+           ((count_items++))
+         else
+           ((count_ignored++))
+         fi
+         ;;
+    esac
+  done < <(wget -O - --timeout=$timeout --quiet "$feed" | sed -e 's/<!\[CDATA\[\([^]]*\)\]\]>/\1/')
+  {
+    if [ $count_items -eq 0 ] && [ $count_ignored -eq 0 ] ; then
+      echo "Warning: feed $feed appears to be empty. Please debug with:"
+      echo "wget -O - \"$feed\" "
+    else
+      $debug && echo "Items: $count_items."
+    fi
+  } 1>&2
+done

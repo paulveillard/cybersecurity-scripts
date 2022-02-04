@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Colorizes hex bytes received on stdin (up to the first space).
+# Typical use case:
+# md5sum myfile | emoji
+# Idea stolen from Oona Räisänen http://www.windytan.com/2014/10/visualizing-hex-bytes-with-unicode-emoji.html
+
+# Use a UTF-8 aware editor to edit this script.
+
+declare -a icons
+icons=( 🌀  🌂  🌅  🌈  🌙  🌞  🌟  🌠  🌰  🌱  🌲  🌳  🌴  🌵  🌷  🌸 \
+        🌹  🌺  🌻  🌼  🌽  🌾  🌿  🍀  🍁  🍂  🍃  🍄  🍅  🍆  🍇  🍈 \
+        🍉  🍊  🍋  🍌  🍍  🍎  🍏  🍐  🍑  🍒  🍓  🍔  🍕  🍖  🍗  🍘 \
+        🍜  🍝  🍞  🍟  🍠  🍡  🍢  🍣  🍤  🍥  🍦  🍧  🍨  🍩  🍪  🍫 \
+        🍬  🍭  🍮  🍯  🍰  🍱  🍲  🍳  🍴  🍵  🍶  🍷  🍸  🍹  🍺  🍻 \
+        🍼  🎀  🎁  🎂  🎃  🎄  🎅  🎈  🎉  🎊  🎋  🎌  🎍  🎎  🎏  🎒 \
+        🎓  🎠  🎡  🎢  🎣  🎤  🎥  🎦  🎧  🎨  🎩  🎪  🎫  🎬  🎭  🎮 \
+        🎯  🎰  🎱  🎲  🎳  🎴  🎵  🎷  🎸  🎹  🎺  🎻  🎽  🎾  🎿  🏀 \
+        🏁  🏂  🏃  🏄  🏆  🏇  🏈  🏉  🏊  🐀  🐁  🐂  🐃  🐄  🐅  🐆 \
+        🐇  🐈  🐉  🐊  🐋  🐌  🐍  🐎  🐏  🐐  🐑  🐒  🐓  🐔  🐕  🐖 \
+        🐗  🐘  🐙  🐚  🐛  🐜  🐝  🐞  🐟  🐠  🐡  🐢  🐣  🐤  🐥  🐦 \
+        🐧  🐨  🐩  🐪  🐫  🐬  🐭  🐮  🐯  🐰  🐱  🐲  🐳  🐴  🐵  🐶 \
+        🐷  🐸  🐹  🐺  🐻  🐼  🐽  🐾  👀  👂  👃  👄  👅  👆  👇  👈 \
+        👉  👊  👋  👌  👍  👎  👏  👐  👑  👒  👓  👔  👕  👖  👗  👘 \
+        👙  👚  👛  👜  👝  👞  👟  👠  👡  👢  👣  👤  👥  👦  👧  👨 \
+        👩  👪  👮  👯  👺  👻  👼  👽  👾  👿  💀  💁  💂  💃  💄  💅 )
+
+
+# Read from stdin character by character
+while IFS= read -N 1 char ; do
+  # Is it a hex character?
+  if [[ "$char" =~ [0-9a-fA-F] ]] ; then
+    # Read next character and check whether it's hex too
+    IFS= read -N 1 secondchar
+    if [[ "$secondchar" =~ [0-9a-fA-F] ]] ; then
+      # We have a hex byte! Convert to decimal to use as array index.
+      decimalvalue=$((16#$char$secondchar))
+      echo -n "${icons[$decimalvalue]}"
+    else
+      echo -n "$char$secondchar"
+    fi
+  elif [ "$char" = " " ] ; then
+    # We've reached a space. Print rest of the line as is.
+    echo -n "$char"
+    IFS= read restofline
+    echo "$restofline"
+  else
+    # It's a non-hex character. Just print it without modification.
+    echo -n "$char"
+  fi
+done
